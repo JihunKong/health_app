@@ -38,8 +38,8 @@ async def get_health_advice(user_data):
     """
 
     try:
-        completion = await client.chat.completions.create(
-            model="gpt-4",
+        completion = client.chat.completions.create(
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "당신은 전문적인 건강 관리 조언자입니다."},
                 {"role": "user", "content": prompt}
