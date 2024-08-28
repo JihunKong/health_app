@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
-import openai
+from openai import OpenAI
 import os
 
-# OpenAI API 키 설정 (실제 배포 시에는 환경 변수를 사용하세요)
-openai.api_key = "your-api-key-here"
+# Streamlit secrets에서 OpenAI API 키 가져오기
+client = OpenAI(api_key=st.secrets["openai"]["api_key"])
 
 # Database simulation (실제 앱에서는 적절한 데이터베이스를 사용하세요)
 def save_to_database(data):
@@ -22,8 +22,8 @@ def generate_time_slots():
         start += timedelta(minutes=30)
     return time_slots
 
-# GPT를 사용하여 건강 관리 조언 생성
-def get_health_advice(user_data):
+# GPT-4를 사용하여 건강 관리 조언 생성
+async def get_health_advice(user_data):
     prompt = f"""
     다음은 사용자의 건강 관리 정보입니다:
     - 가능한 시간대: {', '.join(user_data['available_times'])}
@@ -37,16 +37,21 @@ def get_health_advice(user_data):
     운동 계획, 영양 조언, 생활 습관 개선 팁 등을 포함해주세요.
     """
 
-    response = openai.Completion.create(
-        engine="text-davinci-002",
-        prompt=prompt,
-        max_tokens=500,
-        n=1,
-        stop=None,
-        temperature=0.7,
-    )
-
-    return response.choices[0].text.strip()
+    try:
+        completion = await client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "당신은 전문적인 건강 관리 조언자입니다."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=500,
+            n=1,
+            temperature=0.7
+        )
+        return completion.choices[0].message.content.strip()
+    except Exception as e:
+        st.error(f"OpenAI API 오류: {str(e)}")
+        return None
 
 # 앱
 def main():
@@ -91,10 +96,14 @@ def main():
         save_to_database(user_data)
         
         with st.spinner("AI가 맞춤형 건강 관리 조언을 생성 중입니다..."):
-            advice = get_health_advice(user_data)
+            import asyncio
+            advice = asyncio.run(get_health_advice(user_data))
         
-        st.success("건강 관리 조언이 생성되었습니다!")
-        st.write(advice)
+        if advice:
+            st.success("건강 관리 조언이 생성되었습니다!")
+            st.write(advice)
+        else:
+            st.error("조언 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
 
 if __name__ == "__main__":
     main()
